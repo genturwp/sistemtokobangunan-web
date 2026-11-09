@@ -58,8 +58,9 @@ sudo install -d -o stb -g stb -m 0750 /var/lib/stb-web /var/backups/stb-web
 sudo install -d -o root -g root -m 0755 /opt/stb-web /opt/stb-web/static /etc/stb-web
 ```
 
-Both `/var/lib/stb-web` and `/var/backups/stb-web` must exist before the service starts: the
-unit lists them in `ReadWritePaths=`.
+`/var/lib/stb-web` must exist before the service starts: the unit lists it in
+`ReadWritePaths=`. The service itself cannot write `/var/backups/stb-web` (only the cron job,
+outside the sandbox, writes there), so a compromised web process cannot delete the backups.
 
 ## 3. Binary and static files
 
@@ -179,16 +180,31 @@ Migrations run when `serve` starts. `pre-update-*.db` files are not deleted by t
 
 ## Restoring from a backup
 
+Set `BACKUP` to the file to restore, then run the block as one command. It runs under
+`sudo sh -e`, so it stops at the first failing step. It checks the backup exists before
+touching anything, stops the service, moves the live `stb.db` and its `-wal` and `-shm` files
+aside under a timestamped name (nothing is deleted), installs the backup and starts the service.
+
 ```sh
-sudo systemctl stop stb-web
-cd /var/lib/stb-web
-# keep the old database together with its WAL file, if any, under a matching name
-sudo mv stb.db stb.db.broken
-[ -e stb.db-wal ] && sudo mv stb.db-wal stb.db.broken-wal
-sudo rm -f stb.db-shm
-sudo install -o stb -g stb -m 0640 /var/backups/stb-web/stb-YYYYMMDD.db /var/lib/stb-web/stb.db
-sudo systemctl start stb-web
+BACKUP=/var/backups/stb-web/stb-YYYYMMDD.db
+sudo sh -e -c '
+  backup="$1"
+  dir=/var/lib/stb-web
+  aside="$dir/stb.db.broken-$(date +%Y%m%d%H%M%S)"
+  test -f "$backup"
+  systemctl stop stb-web
+  if [ -e "$dir/stb.db" ]; then mv "$dir/stb.db" "$aside"; fi
+  if [ -e "$dir/stb.db-wal" ]; then mv "$dir/stb.db-wal" "$aside-wal"; fi
+  if [ -e "$dir/stb.db-shm" ]; then mv "$dir/stb.db-shm" "$aside-shm"; fi
+  install -o stb -g stb -m 0640 "$backup" "$dir/stb.db"
+  systemctl start stb-web
+  echo "restored $backup; old files kept as $aside*"
+' restore "$BACKUP"
 curl -s http://127.0.0.1:8080/healthz         # expect: ok
 ```
 
-Sign-ups made after that backup are lost unless they are still in `stb.db.broken`.
+If the block stops part-way, the service stays stopped and the old files are wherever the
+last successful step left them (still `stb.db*`, or moved to `stb.db.broken-<time>*`); move
+them back or finish the steps by hand, then start the service. The moved files keep SQLite's
+naming (`<name>`, `<name>-wal`), so `sqlite3` opens the old database with its WAL. Sign-ups
+made after that backup are lost unless they are still in the `stb.db.broken-<time>` files.

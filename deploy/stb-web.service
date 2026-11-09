@@ -30,12 +30,14 @@ RestartSec=5
 # SIGTERM starts a graceful shutdown; systemd sends SIGKILL if it takes longer than this.
 TimeoutStopSec=30
 
-# Hardening. The whole file system is read-only for the service except these two paths.
+# Hardening. The whole file system is read-only for the service except the database
+# directory. /var/backups/stb-web is deliberately not writable here: backups are written by
+# the cron job, so a compromised web process cannot delete them.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/stb-web /var/backups/stb-web
+ReadWritePaths=/var/lib/stb-web
 
 [Install]
 WantedBy=multi-user.target
