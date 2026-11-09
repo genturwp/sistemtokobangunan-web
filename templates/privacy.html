@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+
+{% block head %}
+{% call m::seo("Kebijakan Privasi | SistemTokoBangunan", "Data apa yang disimpan saat Anda mendaftar di SistemTokoBangunan, untuk apa, dan berapa lama.", base_url ~ "/privasi") %}{% endcall %}
+{% endblock %}
+
+{% block content %}
+<article class="prose">
+  <h1>Kebijakan Privasi</h1>
+
+  <h2>Data yang kami simpan</h2>
+  <p>Saat Anda mendaftar untuk dikabari tentang SistemTokoBangunan, kami menyimpan:</p>
+  <ul>
+    <li>nama;</li>
+    <li>nomor WhatsApp;</li>
+    <li>nama toko;</li>
+    <li>email (opsional).</li>
+  </ul>
+  <p>Kami juga mencatat waktu Anda mendaftar dan menyetujui untuk dihubungi, serta dari mana Anda datang ke situs ini (misalnya Instagram), jika ada.</p>
+
+  <h2>Untuk apa</h2>
+  <p>Data ini hanya dipakai untuk menghubungi Anda tentang SistemTokoBangunan.</p>
+
+  <h2>Tidak dijual, tidak dibagikan</h2>
+  <p>Data Anda tidak dijual dan tidak dibagikan kepada pihak ketiga.</p>
+
+  <h2>Berapa lama disimpan</h2>
+  <p>Data disimpan {{ retention_months }} bulan sejak pendaftaran jika Anda tidak membeli.</p>
+
+  <h2>Minta data dihapus</h2>
+  <p>Untuk meminta data Anda dihapus, kirim pesan <a href="https://wa.me/{{ whatsapp_number }}">lewat WhatsApp</a>.</p>
+</article>
+{% endblock %}

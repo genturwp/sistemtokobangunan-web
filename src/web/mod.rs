@@ -1,9 +1,12 @@
 //! HTTP routes.
 
+pub mod pages;
+
 use std::sync::Arc;
 
 use axum::Router;
 use axum::routing::get;
+use tower_http::services::ServeDir;
 
 use crate::config::Config;
 use crate::db::Db;
@@ -18,7 +21,10 @@ pub struct AppState {
 /// Builds the application router.
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .route("/", get(pages::home))
+        .route("/privasi", get(pages::privacy))
         .route("/healthz", get(healthz))
+        .nest_service("/static", ServeDir::new("static"))
         .with_state(state)
 }
 

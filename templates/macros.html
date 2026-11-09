@@ -1,0 +1,10 @@
+{# Title, description, canonical link and Open Graph tags for one page. #}
+{% macro seo(title, description, url) %}
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
+<link rel="canonical" href="{{ url }}">
+<meta property="og:title" content="{{ title }}">
+<meta property="og:description" content="{{ description }}">
+<meta property="og:url" content="{{ url }}">
+<meta property="og:type" content="website">
+{% endmacro %}
