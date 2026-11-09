@@ -31,10 +31,15 @@ const DEFAULT_BIND: &str = "127.0.0.1:8080";
 impl Config {
     /// Reads the configuration through `get`, which returns the value of a variable or `None`.
     ///
-    /// `STB_DATABASE_PATH`, `STB_BASE_URL` and `STB_WHATSAPP_NUMBER` are required; `STB_BIND`
-    /// defaults to `127.0.0.1:8080`. A trailing `/` on the base URL is removed.
+    /// `STB_DATABASE_PATH`, `STB_BASE_URL` and `STB_WHATSAPP_NUMBER` are required; an empty or
+    /// whitespace-only value counts as missing. `STB_BIND` defaults to `127.0.0.1:8080`.
+    /// Trailing `/` are removed from the base URL; nothing left (e.g. `/`) is invalid.
     pub fn from_vars(get: impl Fn(&str) -> Option<String>) -> Result<Config, ConfigError> {
-        let required = |name: &'static str| get(name).ok_or(ConfigError::Missing(name));
+        let required = |name: &'static str| {
+            get(name)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or(ConfigError::Missing(name))
+        };
 
         let bind = get("STB_BIND")
             .unwrap_or_else(|| DEFAULT_BIND.to_string())
@@ -42,6 +47,9 @@ impl Config {
             .map_err(|_| ConfigError::Invalid("STB_BIND"))?;
         let database_path = PathBuf::from(required("STB_DATABASE_PATH")?);
         let base_url = required("STB_BASE_URL")?.trim_end_matches('/').to_string();
+        if base_url.trim().is_empty() {
+            return Err(ConfigError::Invalid("STB_BASE_URL"));
+        }
         let whatsapp_number = required("STB_WHATSAPP_NUMBER")?;
 
         Ok(Config {
@@ -144,5 +152,42 @@ mod tests {
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
         ]));
         assert_eq!(result, Err(ConfigError::Invalid("STB_BIND")));
+    }
+
+    #[test]
+    fn empty_database_path_is_missing() {
+        let result = Config::from_vars(vars(&[
+            ("STB_DATABASE_PATH", ""),
+            ("STB_BASE_URL", "https://sistemtokobangunan.com"),
+            ("STB_WHATSAPP_NUMBER", "6281234567890"),
+        ]));
+        assert_eq!(result, Err(ConfigError::Missing("STB_DATABASE_PATH")));
+    }
+
+    #[test]
+    fn whitespace_only_values_are_missing() {
+        let result = Config::from_vars(vars(&[
+            ("STB_DATABASE_PATH", "/tmp/x.db"),
+            ("STB_BASE_URL", "  "),
+            ("STB_WHATSAPP_NUMBER", "6281234567890"),
+        ]));
+        assert_eq!(result, Err(ConfigError::Missing("STB_BASE_URL")));
+
+        let result = Config::from_vars(vars(&[
+            ("STB_DATABASE_PATH", "/tmp/x.db"),
+            ("STB_BASE_URL", "https://sistemtokobangunan.com"),
+            ("STB_WHATSAPP_NUMBER", " \t"),
+        ]));
+        assert_eq!(result, Err(ConfigError::Missing("STB_WHATSAPP_NUMBER")));
+    }
+
+    #[test]
+    fn base_url_only_slash_is_invalid() {
+        let result = Config::from_vars(vars(&[
+            ("STB_DATABASE_PATH", "/tmp/x.db"),
+            ("STB_BASE_URL", "/"),
+            ("STB_WHATSAPP_NUMBER", "6281234567890"),
+        ]));
+        assert_eq!(result, Err(ConfigError::Invalid("STB_BASE_URL")));
     }
 }
