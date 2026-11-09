@@ -9,7 +9,8 @@ pub enum PhoneError {
 
 /// Normalises an Indonesian mobile number to `+628…`.
 ///
-/// Removes whitespace, `-`, `.`, `(` and `)`; turns a leading `0` or `62` into `+62`. The result
+/// Removes whitespace, `-`, `.`, `(` and `)`; turns a leading `0` or `62` into `+62`, and puts
+/// `+62` before a leading `8` (the number typed without its `0`). The result
 /// must be `+628` followed by 8 to 11 ASCII digits (the pattern `^\+628\d{8,11}$`).
 pub fn normalize_id_mobile(input: &str) -> Result<String, PhoneError> {
     let compact: String = input
@@ -21,6 +22,8 @@ pub fn normalize_id_mobile(input: &str) -> Result<String, PhoneError> {
         format!("+62{rest}")
     } else if compact.starts_with("62") {
         format!("+{compact}")
+    } else if compact.starts_with('8') {
+        format!("+62{compact}")
     } else {
         compact
     };
@@ -56,6 +59,24 @@ mod tests {
     #[test]
     fn rejects_landline_and_short() {
         for input in ["021-5551234", "0812345", "", "abc"] {
+            assert_eq!(
+                normalize_id_mobile(input),
+                Err(PhoneError::Invalid),
+                "input {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_without_leading_zero() {
+        for input in ["812-3456-7890", "812 3456 7890", "(812) 3456 7890"] {
+            assert_eq!(
+                normalize_id_mobile(input),
+                Ok("+6281234567890".to_string()),
+                "input {input:?}"
+            );
+        }
+        for input in ["21-5551234", "812345", "8123-4567-8901-2"] {
             assert_eq!(
                 normalize_id_mobile(input),
                 Err(PhoneError::Invalid),

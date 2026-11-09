@@ -52,12 +52,12 @@ const NAME_MAX_CHARS: usize = 100;
 /// Longest e-mail address, in characters.
 const EMAIL_MAX_CHARS: usize = 254;
 
-/// Keeps a `utm_source`-style tag (trimmed) only if it is 1 to 50 characters of `[a-z0-9_-]`.
+/// Keeps a `utm_source`-style tag, trimmed and ASCII-lowercased, only if it is then 1 to 50
+/// characters of `[a-z0-9_-]`.
 pub fn clean_source(raw: &str) -> Option<String> {
-    let tag = raw.trim();
+    let tag = raw.trim().to_ascii_lowercase();
     let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-');
-    (!tag.is_empty() && tag.len() <= SOURCE_MAX_CHARS && tag.chars().all(allowed))
-        .then(|| tag.to_string())
+    (!tag.is_empty() && tag.len() <= SOURCE_MAX_CHARS && tag.chars().all(allowed)).then_some(tag)
 }
 
 /// Validates and normalises the form. Every field is trimmed first. Returns every error, in
@@ -114,14 +114,15 @@ pub fn validate(input: &WaitlistInput) -> Result<ValidWaitlist, Vec<FieldError>>
     }
 }
 
-/// At most 254 characters, exactly one `@`, no whitespace, and a `.` after the `@`.
+/// At most 254 characters, exactly one `@` with something before it, no whitespace, and a `.`
+/// after the `@`.
 fn is_plausible_email(email: &str) -> bool {
     email.chars().count() <= EMAIL_MAX_CHARS
         && !email.chars().any(char::is_whitespace)
         && email.matches('@').count() == 1
         && email
             .split_once('@')
-            .is_some_and(|(_, domain)| domain.contains('.'))
+            .is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.'))
 }
 
 /// Stores a waitlist sign-up once per WhatsApp number. A number already on the waitlist is left
@@ -296,6 +297,30 @@ mod tests {
     }
 
     #[test]
+    fn email_without_local_part_rejected() {
+        let input = WaitlistInput {
+            email: Some("@example.com".into()),
+            ..good_input()
+        };
+        assert_eq!(
+            messages(&validate(&input).unwrap_err()),
+            ["Format email tidak valid"]
+        );
+    }
+
+    #[test]
+    fn clean_source_lowercases() {
+        assert_eq!(clean_source("Google"), Some("google".into()));
+        assert_eq!(clean_source(" FB_Ads-2 "), Some("fb_ads-2".into()));
+        assert_eq!(clean_source("Ünïcode"), None);
+        let upper = WaitlistInput {
+            source: Some("Instagram".into()),
+            ..good_input()
+        };
+        assert_eq!(validate(&upper).unwrap().source, Some("instagram".into()));
+    }
+
+    #[test]
     fn script_text_kept_as_typed() {
         let input = WaitlistInput {
             name: "<script>alert(1)</script>".into(),
@@ -314,7 +339,6 @@ mod tests {
         assert_eq!(clean_source(&"a".repeat(50)), Some("a".repeat(50)));
         assert_eq!(clean_source(&"a".repeat(51)), None);
         assert_eq!(clean_source(""), None);
-        assert_eq!(clean_source("Google"), None);
         assert_eq!(clean_source("a b"), None);
         assert_eq!(clean_source("<script>"), None);
 
