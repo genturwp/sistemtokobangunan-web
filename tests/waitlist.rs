@@ -93,6 +93,28 @@ async fn valid_post_redirects_and_stores() {
 }
 
 #[tokio::test]
+async fn stored_times_are_whole_seconds_utc() {
+    let db = Db::open_in_memory().unwrap();
+    let reply = post(&db, &valid_form("081234567890")).await;
+    assert_eq!(reply.status, StatusCode::SEE_OTHER, "{}", reply.body);
+
+    let (created_at, consent_at): (String, String) = db
+        .call(|conn| {
+            conn.query_row("SELECT created_at, consent_at FROM lead", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+        })
+        .await
+        .unwrap();
+    for stored in [&created_at, &consent_at] {
+        // `2026-11-10T03:04:05Z`: 20 characters, no fraction, UTC.
+        assert_eq!(stored.len(), 20, "{stored}");
+        assert!(!stored.contains('.'), "{stored}");
+        assert!(stored.ends_with('Z'), "{stored}");
+    }
+}
+
+#[tokio::test]
 async fn ticked_consent_true_is_accepted() {
     let db = Db::open_in_memory().unwrap();
     let reply = post(
@@ -227,6 +249,13 @@ async fn thanks_page_renders() {
         reply.body
     );
     assert!(reply.body.contains(r#"href="/""#), "{}", reply.body);
+    assert!(
+        reply
+            .body
+            .contains(r#"<meta name="robots" content="noindex">"#),
+        "{}",
+        reply.body
+    );
 }
 
 #[tokio::test]

@@ -33,7 +33,9 @@ impl Config {
     ///
     /// `STB_DATABASE_PATH`, `STB_BASE_URL` and `STB_WHATSAPP_NUMBER` are required; an empty or
     /// whitespace-only value counts as missing. `STB_BIND` defaults to `127.0.0.1:8080`.
-    /// Trailing `/` are removed from the base URL; nothing left (e.g. `/`) is invalid.
+    /// Trailing `/` are removed from the base URL; nothing left (e.g. `/`) is invalid. The
+    /// WhatsApp number must be the digits of a `wa.me` link: `62` then 8 to 13 digits, with no
+    /// `+`, spaces or dashes; anything else is invalid.
     pub fn from_vars(get: impl Fn(&str) -> Option<String>) -> Result<Config, ConfigError> {
         let required = |name: &'static str| required(&get, name);
 
@@ -47,6 +49,9 @@ impl Config {
             return Err(ConfigError::Invalid("STB_BASE_URL"));
         }
         let whatsapp_number = required("STB_WHATSAPP_NUMBER")?;
+        if !is_wa_me_number(&whatsapp_number) {
+            return Err(ConfigError::Invalid("STB_WHATSAPP_NUMBER"));
+        }
 
         Ok(Config {
             bind,
@@ -74,6 +79,14 @@ pub fn database_path_from_vars(
 /// Reads `STB_DATABASE_PATH` from the process environment (see [`database_path_from_vars`]).
 pub fn database_path_from_env() -> Result<PathBuf, ConfigError> {
     database_path_from_vars(|name| std::env::var(name).ok())
+}
+
+/// True when `number` is `62` followed by 8 to 13 ASCII digits, as `https://wa.me/<number>`
+/// links need it.
+fn is_wa_me_number(number: &str) -> bool {
+    number.strip_prefix("62").is_some_and(|rest| {
+        (8..=13).contains(&rest.len()) && rest.bytes().all(|byte| byte.is_ascii_digit())
+    })
 }
 
 /// The value of a required variable; unset, empty or whitespace-only counts as missing.
@@ -218,6 +231,46 @@ mod tests {
                 database_path_from_vars(vars(pairs)),
                 Err(ConfigError::Missing("STB_DATABASE_PATH")),
                 "for {pairs:?}"
+            );
+        }
+    }
+
+    fn with_whatsapp(number: &str) -> Result<Config, ConfigError> {
+        Config::from_vars(vars(&[
+            ("STB_DATABASE_PATH", "/tmp/x.db"),
+            ("STB_BASE_URL", "https://sistemtokobangunan.com"),
+            ("STB_WHATSAPP_NUMBER", number),
+        ]))
+    }
+
+    #[test]
+    fn whatsapp_number_62_then_8_to_13_digits_is_accepted() {
+        for number in ["6281234567890", "6281234567", "628123456789012"] {
+            assert_eq!(
+                with_whatsapp(number).map(|config| config.whatsapp_number),
+                Ok(number.to_string()),
+                "for {number}"
+            );
+        }
+    }
+
+    #[test]
+    fn whatsapp_number_not_wa_me_digits_is_invalid() {
+        for number in [
+            "+6281234567890",
+            "081234567890",
+            "REPLACE_WITH_DIGITS_ONLY_NUMBER",
+            "62 812 3456 7890",
+            "62812-3456-7890",
+            " 6281234567890",
+            "62812345",
+            "6281234567890123",
+            "62",
+        ] {
+            assert_eq!(
+                with_whatsapp(number),
+                Err(ConfigError::Invalid("STB_WHATSAPP_NUMBER")),
+                "for {number:?}"
             );
         }
     }

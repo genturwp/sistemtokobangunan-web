@@ -28,6 +28,7 @@ pub fn router(state: AppState) -> Router {
         .route(waitlist::THANKS_PATH, get(waitlist::thanks))
         .route("/healthz", get(healthz))
         .nest_service("/static", ServeDir::new("static"))
+        .fallback(pages::not_found)
         .with_state(state)
 }
 

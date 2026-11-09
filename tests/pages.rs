@@ -121,3 +121,21 @@ async fn static_css_served() {
     assert_eq!(status, StatusCode::OK);
     assert!(content_type.starts_with("text/css"), "{content_type}");
 }
+
+#[tokio::test]
+async fn unknown_path_is_404_page() {
+    let (status, content_type, body) = get("/tidak-ada").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(content_type.starts_with("text/html"), "{content_type}");
+    assert!(body.contains("<h1>Halaman tidak ditemukan</h1>"), "{body}");
+    assert!(
+        body.contains(r#"<a href="/">Kembali ke beranda</a>"#),
+        "{body}"
+    );
+    assert!(
+        body.contains(r#"<meta name="robots" content="noindex">"#),
+        "{body}"
+    );
+    // Rendered through base.html.
+    assert!(body.contains(r#"class="site-header""#), "{body}");
+}

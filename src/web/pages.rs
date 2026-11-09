@@ -60,6 +60,11 @@ pub struct PrivacyTemplate {
     pub retention_months: u32,
 }
 
+/// The page for an address that does not exist.
+#[derive(Template)]
+#[template(path = "not_found.html")]
+pub struct NotFoundTemplate;
+
 /// Query parameters the home page reads. Anything else in the query is ignored.
 #[derive(Debug, Default, Deserialize)]
 pub struct HomeQuery {
@@ -90,6 +95,15 @@ pub async fn privacy(State(state): State<AppState>) -> Response {
         whatsapp_number: state.config.whatsapp_number.clone(),
         retention_months: lead::LEAD_RETENTION_MONTHS,
     })
+}
+
+/// Fallback for every unknown path: the not-found page, answered with 404.
+pub async fn not_found() -> Response {
+    let mut response = render(&NotFoundTemplate);
+    if response.status() == StatusCode::OK {
+        *response.status_mut() = StatusCode::NOT_FOUND;
+    }
+    response
 }
 
 /// Renders a template as an HTML response, or a bare 500 if rendering fails.

@@ -93,7 +93,7 @@ pub async fn submit(
         Err(errors) => return rerender(&state, typed_form(input, errors)),
     };
 
-    let now = match OffsetDateTime::now_utc().format(&Rfc3339) {
+    let now = match stored_time(OffsetDateTime::now_utc()) {
         Ok(now) => now,
         Err(error) => {
             tracing::error!(%error, "cannot format the current time");
@@ -142,6 +142,33 @@ fn rerender(state: &AppState, form: WaitlistForm) -> Response {
     response
 }
 
+/// `at` as stored in `lead.created_at` and `lead.consent_at`: RFC 3339 in whole seconds
+/// (`2026-11-10T03:04:05Z`), so every stored time has the same shape and sorts as text.
+fn stored_time(at: OffsetDateTime) -> Result<String, time::error::Format> {
+    at.truncate_to_second().format(&Rfc3339)
+}
+
 fn server_error() -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, Html(SERVER_ERROR_PAGE)).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use time::{Date, Month, PrimitiveDateTime, Time};
+
+    fn utc(nanosecond: u32) -> OffsetDateTime {
+        let date = Date::from_calendar_date(2026, Month::November, 10).unwrap();
+        let time = Time::from_hms_nano(3, 4, 5, nanosecond).unwrap();
+        PrimitiveDateTime::new(date, time).assume_utc()
+    }
+
+    #[test]
+    fn stored_time_drops_the_fraction() {
+        assert_eq!(
+            stored_time(utc(987_654_321)).unwrap(),
+            "2026-11-10T03:04:05Z"
+        );
+        assert_eq!(stored_time(utc(0)).unwrap(), "2026-11-10T03:04:05Z");
+    }
 }
