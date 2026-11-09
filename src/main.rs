@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use stb_web::config::Config;
+use stb_web::db::Db;
 use stb_web::web::{AppState, router};
 use tracing_subscriber::EnvFilter;
 
@@ -39,6 +40,14 @@ fn serve() -> ExitCode {
         }
     };
 
+    let db = match Db::open(&config.database_path) {
+        Ok(db) => db,
+        Err(error) => {
+            tracing::error!(%error, path = %config.database_path.display(), "cannot open the database");
+            return ExitCode::FAILURE;
+        }
+    };
+
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -47,7 +56,7 @@ fn serve() -> ExitCode {
         }
     };
 
-    match runtime.block_on(run(config)) {
+    match runtime.block_on(run(config, db)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(%error, "server stopped with an error");
@@ -56,10 +65,11 @@ fn serve() -> ExitCode {
     }
 }
 
-async fn run(config: Config) -> std::io::Result<()> {
+async fn run(config: Config, db: Db) -> std::io::Result<()> {
     let bind = config.bind;
     let state = AppState {
         config: Arc::new(config),
+        db,
     };
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, "listening");
