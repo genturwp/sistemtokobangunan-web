@@ -1,0 +1,24 @@
+# Daily backup of the stb-web database (RFC-0001, ADR-0003). Install as
+# /etc/cron.d/stb-web-backup (no ".cron" suffix: Debian's cron ignores file names with a dot),
+# owned by root, mode 0644; see deploy/README.md.
+#
+# When: 02:00 Asia/Jakarta (WIB, UTC+7, no daylight saving) = 19:00 UTC the day before.
+# The schedule below assumes the server clock is UTC (the usual VPS default; check with
+# `timedatectl`). If the server's time zone is Asia/Jakarta, use "0 2 * * *" instead. CRON_TZ is
+# not used because Debian and Ubuntu cron do not support it.
+#
+# What: as user stb, read STB_DATABASE_PATH from /etc/stb-web/env, write
+# /var/backups/stb-web/stb-YYYYMMDD.db (the Jakarta date), and only if that succeeded delete
+# backups 14 days old or more (-mtime +13: about 14 daily files are kept, today's included;
+# a few seconds' jitter in run time can keep a 15th for one day). The backup
+# command refuses to overwrite an existing file. Output goes to syslog/journal under the tag
+# stb-web-backup. "%" must be written "\%" in a crontab line.
+#
+# The off-site copy of /var/backups/stb-web is the owner's step (deploy/README.md).
+
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Plain log lines (no ANSI colours) in syslog/journal.
+NO_COLOR=1
+
+0 19 * * * stb { set -a && . /etc/stb-web/env && set +a && /opt/stb-web/stb-web backup "/var/backups/stb-web/stb-$(TZ=Asia/Jakarta date +\%Y\%m\%d).db" && find /var/backups/stb-web -maxdepth 1 -type f -name 'stb-*.db' -mtime +13 -delete; } 2>&1 | logger -t stb-web-backup
