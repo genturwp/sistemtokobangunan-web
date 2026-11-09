@@ -1,7 +1,7 @@
 //! The SQLite database: one connection behind a mutex, used from blocking threads (ADR-0009).
 
 use std::path::Path;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use rusqlite::{Connection, TransactionBehavior};
@@ -59,15 +59,23 @@ impl Db {
         T: Send + 'static,
     {
         let conn = Arc::clone(&self.conn);
-        let result = tokio::task::spawn_blocking(move || {
-            // A panic in an earlier `f` poisons the mutex. The connection itself is still
-            // usable: a `rusqlite::Transaction` rolls back when dropped during unwinding.
-            let mut conn = conn.lock().unwrap_or_else(PoisonError::into_inner);
-            f(&mut conn)
-        })
-        .await?;
+        let result = tokio::task::spawn_blocking(move || f(&mut lock(&conn))).await?;
         Ok(result?)
     }
+
+    /// Locks the connection on the calling thread, for synchronous callers such as the owner's
+    /// CLI subcommands. Async code uses [`Db::call`] instead: never hold the guard across an
+    /// `.await`, and never call this on a runtime worker thread.
+    pub fn lock_blocking(&self) -> MutexGuard<'_, Connection> {
+        lock(&self.conn)
+    }
+}
+
+/// Locks the connection, ignoring poisoning: a panic in an earlier holder poisons the mutex, but
+/// the connection itself is still usable (a `rusqlite::Transaction` rolls back when dropped
+/// during unwinding).
+fn lock(conn: &Mutex<Connection>) -> MutexGuard<'_, Connection> {
+    conn.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Applies every migration newer than `PRAGMA user_version`, and sets the new version, in one
@@ -93,34 +101,7 @@ fn migrate(conn: &mut Connection) -> Result<(), DbError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A database file in the temp directory, removed (with its WAL files) before use and on
-    /// drop, so a failing test leaves nothing behind.
-    struct TempDbFile(std::path::PathBuf);
-
-    impl TempDbFile {
-        fn new(name: &str) -> TempDbFile {
-            let file = TempDbFile(
-                std::env::temp_dir().join(format!("stb-web-db-{name}-{}.db", std::process::id())),
-            );
-            file.remove();
-            file
-        }
-
-        fn remove(&self) {
-            for suffix in ["", "-wal", "-shm"] {
-                let mut file = self.0.as_os_str().to_owned();
-                file.push(suffix);
-                let _ = std::fs::remove_file(file);
-            }
-        }
-    }
-
-    impl Drop for TempDbFile {
-        fn drop(&mut self) {
-            self.remove();
-        }
-    }
+    use crate::test_support::TempDbFile;
 
     #[tokio::test]
     async fn migrations_set_user_version_1() {
@@ -194,6 +175,16 @@ mod tests {
 
         assert_eq!(version, 1);
         assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn lock_blocking_gives_the_migrated_connection_without_a_runtime() {
+        let db = Db::open_in_memory().unwrap();
+        let conn = db.lock_blocking();
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 1);
     }
 
     #[test]

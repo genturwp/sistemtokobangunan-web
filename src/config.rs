@@ -35,17 +35,13 @@ impl Config {
     /// whitespace-only value counts as missing. `STB_BIND` defaults to `127.0.0.1:8080`.
     /// Trailing `/` are removed from the base URL; nothing left (e.g. `/`) is invalid.
     pub fn from_vars(get: impl Fn(&str) -> Option<String>) -> Result<Config, ConfigError> {
-        let required = |name: &'static str| {
-            get(name)
-                .filter(|value| !value.trim().is_empty())
-                .ok_or(ConfigError::Missing(name))
-        };
+        let required = |name: &'static str| required(&get, name);
 
         let bind = get("STB_BIND")
             .unwrap_or_else(|| DEFAULT_BIND.to_string())
             .parse()
             .map_err(|_| ConfigError::Invalid("STB_BIND"))?;
-        let database_path = PathBuf::from(required("STB_DATABASE_PATH")?);
+        let database_path = database_path_from_vars(&get)?;
         let base_url = required("STB_BASE_URL")?.trim_end_matches('/').to_string();
         if base_url.trim().is_empty() {
             return Err(ConfigError::Invalid("STB_BASE_URL"));
@@ -64,6 +60,30 @@ impl Config {
     pub fn from_env() -> Result<Config, ConfigError> {
         Self::from_vars(|name| std::env::var(name).ok())
     }
+}
+
+/// Reads only `STB_DATABASE_PATH` through `get`, with the same rule as [`Config::from_vars`]:
+/// unset, empty or whitespace-only is [`ConfigError::Missing`]. Used by the owner's CLI
+/// subcommands, which need no other setting.
+pub fn database_path_from_vars(
+    get: impl Fn(&str) -> Option<String>,
+) -> Result<PathBuf, ConfigError> {
+    required(&get, "STB_DATABASE_PATH").map(PathBuf::from)
+}
+
+/// Reads `STB_DATABASE_PATH` from the process environment (see [`database_path_from_vars`]).
+pub fn database_path_from_env() -> Result<PathBuf, ConfigError> {
+    database_path_from_vars(|name| std::env::var(name).ok())
+}
+
+/// The value of a required variable; unset, empty or whitespace-only counts as missing.
+fn required(
+    get: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+) -> Result<String, ConfigError> {
+    get(name)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(ConfigError::Missing(name))
 }
 
 #[cfg(test)]
@@ -179,6 +199,27 @@ mod tests {
             ("STB_WHATSAPP_NUMBER", " \t"),
         ]));
         assert_eq!(result, Err(ConfigError::Missing("STB_WHATSAPP_NUMBER")));
+    }
+
+    #[test]
+    fn database_path_from_vars_needs_only_that_variable() {
+        let path = database_path_from_vars(vars(&[("STB_DATABASE_PATH", "/tmp/x.db")])).unwrap();
+        assert_eq!(path, PathBuf::from("/tmp/x.db"));
+    }
+
+    #[test]
+    fn database_path_from_vars_missing_empty_or_blank_is_missing() {
+        for pairs in [
+            &[][..],
+            &[("STB_DATABASE_PATH", "")][..],
+            &[("STB_DATABASE_PATH", " \t")][..],
+        ] {
+            assert_eq!(
+                database_path_from_vars(vars(pairs)),
+                Err(ConfigError::Missing("STB_DATABASE_PATH")),
+                "for {pairs:?}"
+            );
+        }
     }
 
     #[test]

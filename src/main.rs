@@ -1,21 +1,20 @@
-//! `stb-web` binary. Usage: `stb-web serve`.
+//! `stb-web` binary. Usage: `stb-web serve | waitlist-export <file.csv> | backup <dest.db>`.
 
+use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use stb_web::config::Config;
+use stb_web::admin_cli;
+use stb_web::config::{self, Config};
 use stb_web::db::Db;
 use stb_web::web::{AppState, router};
 use tracing_subscriber::EnvFilter;
 
-const USAGE: &str = "usage: stb-web serve";
+const USAGE: &str = "usage: stb-web serve
+       stb-web waitlist-export <file.csv>
+       stb-web backup <dest.db>";
 
 fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
-        .with_writer(std::io::stdout)
-        .init();
-
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args
         .iter()
@@ -23,10 +22,72 @@ fn main() -> ExitCode {
         .collect::<Vec<_>>()
         .as_slice()
     {
-        ["serve"] => serve(),
+        ["serve"] => {
+            init_tracing(false);
+            serve()
+        }
+        ["waitlist-export", file] => {
+            init_tracing(true);
+            waitlist_export(Path::new(file))
+        }
+        ["backup", dest] => {
+            init_tracing(true);
+            backup(Path::new(dest))
+        }
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
+        }
+    }
+}
+
+/// Logs go to stdout for the server, and to stderr for the owner's commands, whose stdout
+/// carries only their one-line result.
+fn init_tracing(to_stderr: bool) {
+    let builder = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()));
+    if to_stderr {
+        builder.with_writer(std::io::stderr).init();
+    } else {
+        builder.with_writer(std::io::stdout).init();
+    }
+}
+
+/// Opens the database named by `STB_DATABASE_PATH` (applying migrations) for an owner command.
+fn open_database_from_env() -> Result<Db, String> {
+    let path = config::database_path_from_env()
+        .map_err(|error| format!("cannot read configuration: {error}"))?;
+    Db::open(&path).map_err(|error| format!("cannot open the database {}: {error}", path.display()))
+}
+
+/// `waitlist-export <file.csv>`: prints the row count and file name, never lead data.
+fn waitlist_export(file: &Path) -> ExitCode {
+    let result = open_database_from_env()
+        .and_then(|db| admin_cli::waitlist_export(&db, file).map_err(|error| error.to_string()));
+    match result {
+        Ok(rows) => {
+            println!("exported {rows} rows to {}", file.display());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("error: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `backup <dest.db>`: refuses an existing destination; prints the file name on success.
+fn backup(dest: &Path) -> ExitCode {
+    let result = open_database_from_env()
+        .and_then(|db| admin_cli::backup(&db, dest).map_err(|error| error.to_string()));
+    match result {
+        Ok(()) => {
+            println!("backup written to {}", dest.display());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("error: {error}");
+            ExitCode::FAILURE
         }
     }
 }
