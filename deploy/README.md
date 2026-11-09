@@ -83,9 +83,12 @@ sudo -e /etc/stb-web/env
 ```
 
 Fill in real values. `STB_WHATSAPP_NUMBER` is **digits only, country code first, no `+`**
-(e.g. `6281234567890`), because it is used in `https://wa.me/<number>` links; the server does
-not check its format. `STB_BASE_URL` has no trailing slash. Keep `KEY=value` lines with no
-quotes or spaces: systemd and the cron job's `/bin/sh` both read this file.
+(e.g. `6281234567890`), because it is used in `https://wa.me/<number>` links. The server
+checks it at start-up: it must be `62` followed by 8 to 13 digits, otherwise `stb-web serve`
+logs "environment variable STB_WHATSAPP_NUMBER has an invalid value" (see `journalctl -u
+stb-web`) and exits, so the placeholder from `env.example` is refused too. `STB_BASE_URL` has
+no trailing slash. Keep `KEY=value` lines with no quotes or spaces: systemd and the cron job's
+`/bin/sh` both read this file.
 
 The file is owned by `stb` because the backup cron job runs as `stb` and reads
 `STB_DATABASE_PATH` from it. It holds no password today; keep it 0600 anyway, since later
@@ -114,6 +117,12 @@ sudo systemctl reload caddy
 curl -s https://sistemtokobangunan.com/healthz                  # expect: ok
 curl -sI https://www.sistemtokobangunan.com/ | head -n 3        # expect: 301 to the bare domain
 ```
+
+The site block compresses responses (`encode zstd gzip`) and sends `X-Content-Type-Options:
+nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`. It does **not** send HSTS
+(`Strict-Transport-Security`) yet, because the domain is not confirmed: once HTTPS is confirmed
+working on the final domain, HSTS can be added to the `header` block (for example
+`Strict-Transport-Security "max-age=31536000"`).
 
 ## 7. Daily backup
 
@@ -162,6 +171,18 @@ keep the off-site copy private.
    ```sh
    sudo -u stb sqlite3 /var/lib/stb-web/stb.db "DELETE FROM lead WHERE kind = 'waitlist' AND whatsapp = '+628XXXXXXXXXX';"
    ```
+
+## Routine checks (weekly)
+
+The backup cron job's failures go only to the journal; nobody is notified. Once a week:
+
+```sh
+ls -lt /var/backups/stb-web | head                      # newest stb-YYYYMMDD.db is from last night
+journalctl -t stb-web-backup --since "-7 days"          # look for errors from the backup runs
+```
+
+If last night's file is missing or the journal shows errors, run the manual backup check in
+step 7 and fix the cause before the 14-day retention deletes the last good backups.
 
 ## Updating to a new version
 
