@@ -139,6 +139,29 @@ fn backup_over_an_existing_file_fails_and_keeps_it() {
 }
 
 #[test]
+fn owner_commands_refuse_a_missing_database_and_create_nothing() {
+    let database = TempFile::new("absent-db");
+    let target = TempFile::new("absent-target");
+
+    for command in ["waitlist-export", "backup"] {
+        let output = run(Some(&database.0), &[command, target.0.to_str().unwrap()]);
+
+        assert_eq!(output.status.code(), Some(1), "{command}: {output:?}");
+        assert!(text(&output.stdout).is_empty(), "{command}: {output:?}");
+        assert!(
+            text(&output.stderr).contains(&format!("database not found: {}", database.0.display())),
+            "{command}: {output:?}"
+        );
+        assert!(!database.0.exists(), "{command} created the database");
+        assert!(
+            !target.0.exists(),
+            "{command} created {}",
+            target.0.display()
+        );
+    }
+}
+
+#[test]
 fn missing_database_path_fails_with_exit_1() {
     let dest = TempFile::new("no-config-dest.db");
 

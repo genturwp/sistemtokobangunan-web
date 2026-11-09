@@ -53,11 +53,12 @@ fn init_tracing(to_stderr: bool) {
     }
 }
 
-/// Opens the database named by `STB_DATABASE_PATH` (applying migrations) for an owner command.
+/// Opens the existing database named by `STB_DATABASE_PATH` (applying migrations) for an owner
+/// command; a missing file is an error, never a new empty database.
 fn open_database_from_env() -> Result<Db, String> {
     let path = config::database_path_from_env()
         .map_err(|error| format!("cannot read configuration: {error}"))?;
-    Db::open(&path).map_err(|error| format!("cannot open the database {}: {error}", path.display()))
+    admin_cli::open_existing_database(&path).map_err(|error| error.to_string())
 }
 
 /// `waitlist-export <file.csv>`: prints the row count and file name, never lead data.

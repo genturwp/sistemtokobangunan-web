@@ -27,7 +27,8 @@ Then open <http://127.0.0.1:8080/healthz>, which answers `ok`.
 
 ## Owner commands
 
-Both need only `STB_DATABASE_PATH`. They print one line (a count and a file name, never lead
+Both need only `STB_DATABASE_PATH`, whose file must already exist (they never create an empty
+database; only `serve` does). They print one line (a count and a file name, never lead
 data) and exit 0; errors go to stderr with exit 1; wrong arguments print the usage with exit 2.
 
 ```sh
@@ -35,8 +36,8 @@ STB_DATABASE_PATH=./dev.db cargo run -- waitlist-export waitlist.csv   # UTF-8 C
 STB_DATABASE_PATH=./dev.db cargo run -- backup backup-2026-11-09.db     # refuses an existing file
 ```
 
-The CSV holds every waitlist sign-up, oldest first. Values starting with `=`, `+`, `-` or `@`
-(including WhatsApp numbers, `'+628…`) get a leading `'` so a spreadsheet does not run them as
+The CSV holds every waitlist sign-up, oldest first. Values starting with `=`, `+`, `-`, `@`, a tab or a
+carriage return (including WhatsApp numbers, `'+628…`) get a leading `'` so a spreadsheet does not run them as
 formulas. The backup is a consistent copy made with SQLite's online backup API, safe while the
 server runs.
 

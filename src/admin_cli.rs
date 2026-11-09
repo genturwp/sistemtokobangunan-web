@@ -14,6 +14,13 @@ use crate::db::Db;
 /// Why an owner command failed.
 #[derive(Debug, thiserror::Error)]
 pub enum AdminError {
+    #[error("database not found: {0}")]
+    DatabaseNotFound(PathBuf),
+    #[error("cannot open the database {path}: {source}")]
+    Open {
+        path: PathBuf,
+        source: crate::db::DbError,
+    },
     #[error("{0} already exists; choose a new file name")]
     DestinationExists(PathBuf),
     #[error("cannot write {path}: {source}")]
@@ -34,9 +41,10 @@ const HEADER: &str = "created_at,name,whatsapp,store_name,email,source,status";
 ///
 /// UTF-8 with a BOM; the header line [`HEADER`]; rows ordered by `created_at`, then `id`; lines
 /// end in CRLF (RFC 4180). Every field is quoted with `"` doubled, NULL is an empty field, and a
-/// field starting with `=`, `+`, `-` or `@` gets a leading `'` so a spreadsheet does not run it
-/// as a formula (stored WhatsApp numbers start with `+`, so they get it too). One `SELECT`, so the
-/// rows are a consistent snapshot. A database error is returned as an [`std::io::Error`].
+/// field starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'` so a
+/// spreadsheet does not run it as a formula (stored WhatsApp numbers start with `+`, so they get
+/// it too). One `SELECT`, so the rows are a consistent snapshot. A database error is returned
+/// as an [`std::io::Error`].
 pub fn export_waitlist_csv(conn: &Connection, out: &mut impl Write) -> std::io::Result<usize> {
     let mut stmt = conn
         .prepare(
@@ -65,7 +73,10 @@ pub fn export_waitlist_csv(conn: &Connection, out: &mut impl Write) -> std::io::
 
 /// Writes one quoted CSV field, formula-neutralised (see [`export_waitlist_csv`]).
 fn write_field(out: &mut impl Write, value: &str) -> std::io::Result<()> {
-    let formula = matches!(value.chars().next(), Some('=' | '+' | '-' | '@'));
+    let formula = matches!(
+        value.chars().next(),
+        Some('=' | '+' | '-' | '@' | '\t' | '\r')
+    );
     let prefix = if formula { "'" } else { "" };
     write!(out, "\"{prefix}{}\"", value.replace('"', "\"\""))
 }
@@ -85,6 +96,19 @@ pub fn backup_to(conn: &Connection, dest: &Path) -> rusqlite::Result<()> {
             Some("the database is busy; try the backup again".to_string()),
         )),
     }
+}
+
+/// Opens the owner's database at `path` (applying migrations), which must already exist: a
+/// mistyped `STB_DATABASE_PATH` must not create an empty database that is then exported or
+/// backed up as if it were the real one. Only `serve` creates the database.
+pub fn open_existing_database(path: &Path) -> Result<Db, AdminError> {
+    if !path.is_file() {
+        return Err(AdminError::DatabaseNotFound(path.to_path_buf()));
+    }
+    Db::open(path).map_err(|error| AdminError::Open {
+        path: path.to_path_buf(),
+        source: error,
+    })
 }
 
 /// `waitlist-export`: writes the waitlist CSV to `file` (replacing it if it exists) and returns
@@ -274,6 +298,53 @@ mod tests {
             ),
             "got {csv:?}"
         );
+    }
+
+    #[test]
+    fn csv_neutralises_leading_tab_and_carriage_return() {
+        let db = Db::open_in_memory().unwrap();
+        let conn = db.lock_blocking();
+        insert(
+            &conn,
+            &Row {
+                store_name: "\r=1",
+                ..row("\t=1", "+6281234567890", "2026-11-09T01:00:00Z")
+            },
+        );
+
+        let (_, csv) = export(&conn);
+
+        assert!(
+            csv.contains(",\"'\t=1\",\"'+6281234567890\",\"'\r=1\","),
+            "got {csv:?}"
+        );
+    }
+
+    #[test]
+    fn open_existing_database_refuses_a_missing_file_and_creates_nothing() {
+        let file = TempDbFile::new("admin-open-missing");
+
+        let result = open_existing_database(&file.0);
+
+        assert!(
+            matches!(&result, Err(AdminError::DatabaseNotFound(path)) if path == &file.0),
+            "got {result:?}"
+        );
+        assert!(!file.0.exists());
+    }
+
+    #[test]
+    fn open_existing_database_opens_an_existing_file() {
+        let file = TempDbFile::new("admin-open-existing");
+        drop(Db::open(&file.0).unwrap());
+
+        let db = open_existing_database(&file.0).unwrap();
+
+        let version: i64 = db
+            .lock_blocking()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 1);
     }
 
     #[test]
