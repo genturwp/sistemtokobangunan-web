@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+
+{% block head %}
+{% call m::seo("Aplikasi Kasir & Kasbon Toko Bangunan | SistemTokoBangunan", "Catat kasbon pelanggan, lihat siapa yang belum bayar, dan kirim rincian lewat WhatsApp. Aplikasi kasir toko bangunan, tanpa internet, bayar sekali.", base_url ~ "/") %}{% endcall %}
+{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <p class="kicker">Aplikasi kasir &amp; kasbon toko bangunan</p>
+  <h1>Siapa yang masih kasbon, berapa, sejak kapan. Langsung kelihatan.</h1>
+
+  <div class="kasbon-list">
+    <ul>
+      <li><span class="who">Tukang Anto<small>jatuh tempo lewat 12 hari</small></span><span class="amount late">2.100.000</span></li>
+      <li><span class="who">Pak Darto<small>jatuh tempo 30 Nov</small></span><span class="amount">1.250.000</span></li>
+      <li><span class="who">CV Maju Jaya<small>giro cair 5 Des</small></span><span class="amount">7.500.000</span></li>
+    </ul>
+    <p class="total"><span>Total kasbon</span><span class="amount">10.850.000</span></p>
+  </div>
+</section>
+
+<section class="how">
+  <h2>Begini caranya</h2>
+  <ol class="steps">
+    <li><b>Catat saat jualan.</b> Di kasir, pilih pelanggan dan bayar "Kasbon". Nota tersimpan, tidak perlu tulis ulang di buku.</li>
+    <li><b>Dijumlah otomatis.</b> Sisa kasbon tiap pelanggan dihitung sendiri, yang lewat jatuh tempo ditandai merah, dan kasir diingatkan kalau melewati batas.</li>
+    <li><b>Tagih dengan rincian.</b> Kirim rincian nota dan pembayaran ke pelanggan lewat WhatsApp sekali klik. Saat dibayar, sisanya langsung berkurang.</li>
+  </ol>
+</section>
+
+<section class="signup" id="daftar">
+  <h2>Segera hadir. Daftar untuk dikabari pertama.</h2>
+  <form method="post" action="/waitlist" class="waitlist" novalidate>
+    <div class="field">
+      <label for="name">Nama</label>
+      <input type="text" id="name" name="name" value="{{ form.values.name }}" autocomplete="name"{% if let Some(_) = form.error_for("name") %} aria-invalid="true" aria-describedby="name-error"{% endif %}>
+      {% if let Some(message) = form.error_for("name") %}<p class="field-error" id="name-error">{{ message }}</p>{% endif %}
+    </div>
+    <div class="field">
+      <label for="whatsapp">Nomor WhatsApp</label>
+      <input type="tel" id="whatsapp" name="whatsapp" value="{{ form.values.whatsapp }}" autocomplete="tel" inputmode="tel"{% if let Some(_) = form.error_for("whatsapp") %} aria-invalid="true" aria-describedby="whatsapp-error"{% endif %}>
+      {% if let Some(message) = form.error_for("whatsapp") %}<p class="field-error" id="whatsapp-error">{{ message }}</p>{% endif %}
+    </div>
+    <div class="field">
+      <label for="store_name">Nama toko</label>
+      <input type="text" id="store_name" name="store_name" value="{{ form.values.store_name }}" autocomplete="organization"{% if let Some(_) = form.error_for("store_name") %} aria-invalid="true" aria-describedby="store_name-error"{% endif %}>
+      {% if let Some(message) = form.error_for("store_name") %}<p class="field-error" id="store_name-error">{{ message }}</p>{% endif %}
+    </div>
+    <div class="field">
+      <label for="email">Email (opsional)</label>
+      <input type="email" id="email" name="email" value="{% if let Some(email) = form.values.email %}{{ email }}{% endif %}" autocomplete="email"{% if let Some(_) = form.error_for("email") %} aria-invalid="true" aria-describedby="email-error"{% endif %}>
+      {% if let Some(message) = form.error_for("email") %}<p class="field-error" id="email-error">{{ message }}</p>{% endif %}
+    </div>
+    <div class="field consent">
+      <input type="checkbox" id="consent" name="consent" value="true"{% if form.values.consent %} checked{% endif %}{% if let Some(_) = form.error_for("consent") %} aria-invalid="true" aria-describedby="consent-error"{% endif %}>
+      <label for="consent">Saya bersedia dihubungi lewat WhatsApp tentang SistemTokoBangunan. <a href="/privasi">Kebijakan Privasi</a></label>
+      {% if let Some(message) = form.error_for("consent") %}<p class="field-error" id="consent-error">{{ message }}</p>{% endif %}
+    </div>
+    <input type="hidden" name="source" value="{% if let Some(source) = form.values.source %}{{ source }}{% endif %}">
+    <div class="hp" aria-hidden="true">
+      <label for="website">Kosongkan kolom ini</label>
+      <input type="text" id="website" name="website" value="" tabindex="-1" autocomplete="off">
+    </div>
+    <button type="submit">Daftar</button>
+  </form>
+  <p class="trust">Tanpa internet · Bayar sekali · Untuk komputer Windows</p>
+  <p class="contact"><a href="https://wa.me/{{ whatsapp_number }}">Tanya lewat WhatsApp</a></p>
+</section>
+{% endblock %}

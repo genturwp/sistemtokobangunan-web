@@ -1,0 +1,24 @@
+# Caddy configuration for sistemtokobangunan.com (RFC-0001, ADR-0003).
+# Install as /etc/caddy/Caddyfile; see deploy/README.md.
+#
+# Caddy obtains and renews the HTTPS certificates itself. It needs DNS records for both names
+# pointing at this server and ports 80 and 443 open.
+
+sistemtokobangunan.com {
+	encode zstd gzip
+
+	# No Strict-Transport-Security yet: add it once HTTPS is confirmed working on the final
+	# domain (see deploy/README.md, step 6).
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	# stb-web listens on loopback only (STB_BIND=127.0.0.1:8080).
+	reverse_proxy 127.0.0.1:8080
+}
+
+# www redirects to the bare domain, keeping the path and query.
+www.sistemtokobangunan.com {
+	redir https://sistemtokobangunan.com{uri} permanent
+}

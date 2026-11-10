@@ -1,0 +1,43 @@
+# systemd unit for stb-web, the sistemtokobangunan.com website (RFC-0001, ADR-0003).
+# Install as /etc/systemd/system/stb-web.service; see deploy/README.md.
+#
+# Layout on the server:
+#   /opt/stb-web/stb-web     the release binary (Linux x86-64)
+#   /opt/stb-web/static/     static files, served from the relative path "static"
+#   /etc/stb-web/env         environment (from deploy/env.example), mode 0600
+#   /var/lib/stb-web/stb.db  the SQLite database (plus its -wal and -shm files)
+#   /var/backups/stb-web/    daily backups (deploy/stb-web-backup.cron)
+
+[Unit]
+Description=SistemTokoBangunan website (stb-web)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=stb
+Group=stb
+# "serve" serves /static from the relative path "static", so the working directory matters.
+WorkingDirectory=/opt/stb-web
+# Holds STB_BIND=127.0.0.1:8080, STB_DATABASE_PATH=/var/lib/stb-web/stb.db, STB_BASE_URL,
+# STB_WHATSAPP_NUMBER and optionally RUST_LOG. The backup cron job reads the same file.
+EnvironmentFile=/etc/stb-web/env
+# Plain log lines for the journal (tracing-subscriber writes ANSI colours otherwise).
+Environment=NO_COLOR=1
+ExecStart=/opt/stb-web/stb-web serve
+Restart=on-failure
+RestartSec=5
+# SIGTERM starts a graceful shutdown; systemd sends SIGKILL if it takes longer than this.
+TimeoutStopSec=30
+
+# Hardening. The whole file system is read-only for the service except the database
+# directory. /var/backups/stb-web is deliberately not writable here: backups are written by
+# the cron job, so a compromised web process cannot delete them.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/stb-web
+
+[Install]
+WantedBy=multi-user.target
