@@ -48,6 +48,8 @@ pub struct HomeTemplate {
     pub base_url: String,
     /// The owner's WhatsApp number for the `wa.me` link.
     pub whatsapp_number: String,
+    /// The site's contact email for the `mailto:` link.
+    pub contact_email: String,
     pub form: WaitlistForm,
 }
 
@@ -57,6 +59,7 @@ pub struct HomeTemplate {
 pub struct PrivacyTemplate {
     pub base_url: String,
     pub whatsapp_number: String,
+    pub contact_email: String,
     pub retention_months: u32,
 }
 
@@ -84,6 +87,7 @@ pub async fn home(
     render(&HomeTemplate {
         base_url: state.config.base_url.clone(),
         whatsapp_number: state.config.whatsapp_number.clone(),
+        contact_email: state.config.contact_email.clone(),
         form: WaitlistForm::empty(source),
     })
 }
@@ -93,6 +97,7 @@ pub async fn privacy(State(state): State<AppState>) -> Response {
     render(&PrivacyTemplate {
         base_url: state.config.base_url.clone(),
         whatsapp_number: state.config.whatsapp_number.clone(),
+        contact_email: state.config.contact_email.clone(),
         retention_months: lead::LEAD_RETENTION_MONTHS,
     })
 }
@@ -161,6 +166,7 @@ mod tests {
         HomeTemplate {
             base_url: "https://example.test".into(),
             whatsapp_number: "6281234567890".into(),
+            contact_email: "kontak@example.test".into(),
             form,
         }
         .render()

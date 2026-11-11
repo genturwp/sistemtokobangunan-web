@@ -10,6 +10,7 @@ in the SistemTokoBangunan wiki.
 STB_DATABASE_PATH=./dev.db \
 STB_BASE_URL=http://127.0.0.1:8080 \
 STB_WHATSAPP_NUMBER=6281234567890 \
+STB_CONTACT_EMAIL=halo@example.com \
 cargo run -- serve
 ```
 
@@ -22,6 +23,7 @@ Then open <http://127.0.0.1:8080/healthz>, which answers `ok`.
 | `STB_DATABASE_PATH` | yes | Path of the SQLite database file. |
 | `STB_BASE_URL` | yes | Public base URL of the site, e.g. `https://sistemtokobangunan.com`. A trailing `/` is removed. |
 | `STB_WHATSAPP_NUMBER` | yes | The store owner's WhatsApp number used in contact links, e.g. `6281234567890`. |
+| `STB_CONTACT_EMAIL` | yes | The site's public contact email, shown as a `mailto:` link next to WhatsApp, e.g. `halo@example.com`. One `@`, a `.` in the domain, no spaces, at most 254 characters. |
 | `STB_BIND` | no | Address and port to listen on. Default `127.0.0.1:8080`. |
 | `RUST_LOG` | no | Log filter for `tracing-subscriber`. Default `info`. |
 

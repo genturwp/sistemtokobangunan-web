@@ -134,6 +134,7 @@ fn rerender(state: &AppState, form: WaitlistForm) -> Response {
     let mut response = render(&HomeTemplate {
         base_url: state.config.base_url.clone(),
         whatsapp_number: state.config.whatsapp_number.clone(),
+        contact_email: state.config.contact_email.clone(),
         form,
     });
     if response.status() == StatusCode::OK {

@@ -20,7 +20,8 @@ Group=stb
 # "serve" serves /static from the relative path "static", so the working directory matters.
 WorkingDirectory=/opt/stb-web
 # Holds STB_BIND=127.0.0.1:8080, STB_DATABASE_PATH=/var/lib/stb-web/stb.db, STB_BASE_URL,
-# STB_WHATSAPP_NUMBER and optionally RUST_LOG. The backup cron job reads the same file.
+# STB_WHATSAPP_NUMBER, STB_CONTACT_EMAIL and optionally RUST_LOG. The backup cron job reads
+# the same file.
 EnvironmentFile=/etc/stb-web/env
 # Plain log lines for the journal (tracing-subscriber writes ANSI colours otherwise).
 Environment=NO_COLOR=1
