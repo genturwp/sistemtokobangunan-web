@@ -14,6 +14,8 @@ pub struct Config {
     pub base_url: String,
     /// The owner's WhatsApp number for contact links (`STB_WHATSAPP_NUMBER`).
     pub whatsapp_number: String,
+    /// The site's public contact email for `mailto:` links (`STB_CONTACT_EMAIL`).
+    pub contact_email: String,
 }
 
 /// Why the configuration could not be read. Each variant names the variable.
@@ -31,11 +33,12 @@ const DEFAULT_BIND: &str = "127.0.0.1:8080";
 impl Config {
     /// Reads the configuration through `get`, which returns the value of a variable or `None`.
     ///
-    /// `STB_DATABASE_PATH`, `STB_BASE_URL` and `STB_WHATSAPP_NUMBER` are required; an empty or
-    /// whitespace-only value counts as missing. `STB_BIND` defaults to `127.0.0.1:8080`.
-    /// Trailing `/` are removed from the base URL; nothing left (e.g. `/`) is invalid. The
-    /// WhatsApp number must be the digits of a `wa.me` link: `62` then 8 to 13 digits, with no
-    /// `+`, spaces or dashes; anything else is invalid.
+    /// `STB_DATABASE_PATH`, `STB_BASE_URL`, `STB_WHATSAPP_NUMBER` and `STB_CONTACT_EMAIL` are
+    /// required; an empty or whitespace-only value counts as missing. `STB_BIND` defaults to
+    /// `127.0.0.1:8080`. Trailing `/` are removed from the base URL; nothing left (e.g. `/`) is
+    /// invalid. The WhatsApp number must be the digits of a `wa.me` link: `62` then 8 to 13
+    /// digits, with no `+`, spaces or dashes; anything else is invalid. The contact email is
+    /// trimmed and must then pass [`is_plain_email`]; anything else is invalid.
     pub fn from_vars(get: impl Fn(&str) -> Option<String>) -> Result<Config, ConfigError> {
         let required = |name: &'static str| required(&get, name);
 
@@ -52,12 +55,17 @@ impl Config {
         if !is_wa_me_number(&whatsapp_number) {
             return Err(ConfigError::Invalid("STB_WHATSAPP_NUMBER"));
         }
+        let contact_email = required("STB_CONTACT_EMAIL")?.trim().to_string();
+        if !is_plain_email(&contact_email) {
+            return Err(ConfigError::Invalid("STB_CONTACT_EMAIL"));
+        }
 
         Ok(Config {
             bind,
             database_path,
             base_url,
             whatsapp_number,
+            contact_email,
         })
     }
 
@@ -87,6 +95,24 @@ fn is_wa_me_number(number: &str) -> bool {
     number.strip_prefix("62").is_some_and(|rest| {
         (8..=13).contains(&rest.len()) && rest.bytes().all(|byte| byte.is_ascii_digit())
     })
+}
+
+/// Longest address accepted for `STB_CONTACT_EMAIL`, in characters.
+const MAX_EMAIL_CHARS: usize = 254;
+
+/// A deliberately simple check that `email` can go into a `mailto:` link: at most 254
+/// characters, no whitespace, exactly one `@` with something on both sides, and a `.` in the
+/// domain. It is a guard against typos and placeholders, not a full address parser.
+fn is_plain_email(email: &str) -> bool {
+    let Some((local, domain)) = email.split_once('@') else {
+        return false;
+    };
+    email.chars().count() <= MAX_EMAIL_CHARS
+        && !email.chars().any(char::is_whitespace)
+        && !local.is_empty()
+        && !domain.is_empty()
+        && !domain.contains('@')
+        && domain.contains('.')
 }
 
 /// The value of a required variable; unset, empty or whitespace-only counts as missing.
@@ -119,12 +145,14 @@ mod tests {
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]))
         .unwrap();
         assert_eq!(config.bind, "127.0.0.1:8080".parse().unwrap());
         assert_eq!(config.database_path, PathBuf::from("/tmp/x.db"));
         assert_eq!(config.base_url, "https://sistemtokobangunan.com");
         assert_eq!(config.whatsapp_number, "6281234567890");
+        assert_eq!(config.contact_email, "sistemtokobangunan@gmail.com");
     }
 
     #[test]
@@ -133,6 +161,7 @@ mod tests {
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]))
         .unwrap();
         assert_eq!(config.bind, "127.0.0.1:8080".parse().unwrap());
@@ -143,6 +172,7 @@ mod tests {
         let result = Config::from_vars(vars(&[
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Missing("STB_DATABASE_PATH")));
     }
@@ -153,6 +183,7 @@ mod tests {
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "https://x.com/"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]))
         .unwrap();
         assert_eq!(config.base_url, "https://x.com");
@@ -163,6 +194,7 @@ mod tests {
         let result = Config::from_vars(vars(&[
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Missing("STB_BASE_URL")));
     }
@@ -172,6 +204,7 @@ mod tests {
         let result = Config::from_vars(vars(&[
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Missing("STB_WHATSAPP_NUMBER")));
     }
@@ -183,6 +216,7 @@ mod tests {
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Invalid("STB_BIND")));
     }
@@ -193,6 +227,7 @@ mod tests {
             ("STB_DATABASE_PATH", ""),
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Missing("STB_DATABASE_PATH")));
     }
@@ -203,6 +238,7 @@ mod tests {
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "  "),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Missing("STB_BASE_URL")));
 
@@ -210,6 +246,7 @@ mod tests {
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
             ("STB_WHATSAPP_NUMBER", " \t"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Missing("STB_WHATSAPP_NUMBER")));
     }
@@ -240,6 +277,7 @@ mod tests {
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "https://sistemtokobangunan.com"),
             ("STB_WHATSAPP_NUMBER", number),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]))
     }
 
@@ -275,12 +313,97 @@ mod tests {
         }
     }
 
+    fn with_email(email: &str) -> Result<Config, ConfigError> {
+        Config::from_vars(vars(&[
+            ("STB_DATABASE_PATH", "/tmp/x.db"),
+            ("STB_BASE_URL", "https://sistemtokobangunan.com"),
+            ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", email),
+        ]))
+    }
+
+    #[test]
+    fn missing_contact_email_is_error() {
+        let result = Config::from_vars(vars(&[
+            ("STB_DATABASE_PATH", "/tmp/x.db"),
+            ("STB_BASE_URL", "https://sistemtokobangunan.com"),
+            ("STB_WHATSAPP_NUMBER", "6281234567890"),
+        ]));
+        assert_eq!(result, Err(ConfigError::Missing("STB_CONTACT_EMAIL")));
+    }
+
+    #[test]
+    fn empty_or_blank_contact_email_is_missing() {
+        for email in ["", "  ", " \t"] {
+            assert_eq!(
+                with_email(email),
+                Err(ConfigError::Missing("STB_CONTACT_EMAIL")),
+                "for {email:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn contact_email_is_accepted_and_trimmed() {
+        for (email, expected) in [
+            (
+                "sistemtokobangunan@gmail.com",
+                "sistemtokobangunan@gmail.com",
+            ),
+            ("halo@toko.co.id", "halo@toko.co.id"),
+            (
+                " sistemtokobangunan@gmail.com\t",
+                "sistemtokobangunan@gmail.com",
+            ),
+        ] {
+            assert_eq!(
+                with_email(email).map(|config| config.contact_email),
+                Ok(expected.to_string()),
+                "for {email:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn contact_email_up_to_254_characters_is_accepted() {
+        let email = format!("{}@gmail.com", "a".repeat(244));
+        assert_eq!(email.len(), 254);
+        assert_eq!(
+            with_email(&email).map(|config| config.contact_email),
+            Ok(email)
+        );
+    }
+
+    #[test]
+    fn contact_email_not_an_address_is_invalid() {
+        let too_long = format!("{}@gmail.com", "a".repeat(245));
+        for email in [
+            "REPLACE_WITH_CONTACT_EMAIL",
+            "sistemtokobangunan.gmail.com",
+            "@gmail.com",
+            "sistemtokobangunan@",
+            "sistemtokobangunan@gmail",
+            "a@b@gmail.com",
+            "sistem toko@gmail.com",
+            "sistemtokobangunan@gmail .com",
+            "sistemtokobangunan@\tgmail.com",
+            too_long.as_str(),
+        ] {
+            assert_eq!(
+                with_email(email),
+                Err(ConfigError::Invalid("STB_CONTACT_EMAIL")),
+                "for {email:?}"
+            );
+        }
+    }
+
     #[test]
     fn base_url_only_slash_is_invalid() {
         let result = Config::from_vars(vars(&[
             ("STB_DATABASE_PATH", "/tmp/x.db"),
             ("STB_BASE_URL", "/"),
             ("STB_WHATSAPP_NUMBER", "6281234567890"),
+            ("STB_CONTACT_EMAIL", "sistemtokobangunan@gmail.com"),
         ]));
         assert_eq!(result, Err(ConfigError::Invalid("STB_BASE_URL")));
     }

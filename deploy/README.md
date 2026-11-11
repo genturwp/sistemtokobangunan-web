@@ -86,7 +86,10 @@ Fill in real values. `STB_WHATSAPP_NUMBER` is **digits only, country code first,
 (e.g. `6281234567890`), because it is used in `https://wa.me/<number>` links. The server
 checks it at start-up: it must be `62` followed by 8 to 13 digits, otherwise `stb-web serve`
 logs "environment variable STB_WHATSAPP_NUMBER has an invalid value" (see `journalctl -u
-stb-web`) and exits, so the placeholder from `env.example` is refused too. `STB_BASE_URL` has
+stb-web`) and exits, so the placeholder from `env.example` is refused too.
+`STB_CONTACT_EMAIL` is the public contact address shown as a `mailto:` link on the home and
+privacy pages; it is checked the same way (one `@` with text on both sides, a `.` after the
+`@`, no spaces, at most 254 characters), so its placeholder is refused as well. `STB_BASE_URL` has
 no trailing slash. Keep `KEY=value` lines with no quotes or spaces: systemd and the cron job's
 `/bin/sh` both read this file.
 
@@ -192,6 +195,9 @@ sudo -u stb sh -c 'set -a && . /etc/stb-web/env && set +a && /opt/stb-web/stb-we
 sudo install -o root -g root -m 0755 target/release/stb-web /opt/stb-web/stb-web.new
 sudo mv /opt/stb-web/stb-web.new /opt/stb-web/stb-web
 sudo cp -R static/. /opt/stb-web/static/
+# add any new STB_* variables from deploy/env.example to /etc/stb-web/env first (this release:
+# STB_CONTACT_EMAIL); `stb-web serve` exits at start-up if a required one is missing
+sudo -e /etc/stb-web/env
 sudo systemctl restart stb-web
 curl -s http://127.0.0.1:8080/healthz         # expect: ok
 ```

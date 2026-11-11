@@ -17,6 +17,7 @@ fn serve_exits_cleanly_on_sigterm() {
         .env("STB_DATABASE_PATH", &database_path)
         .env("STB_BASE_URL", "http://localhost")
         .env("STB_WHATSAPP_NUMBER", "6281234567890")
+        .env("STB_CONTACT_EMAIL", "kontak@example.test")
         .env("RUST_LOG", "info")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

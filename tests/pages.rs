@@ -16,6 +16,7 @@ fn test_state() -> AppState {
             database_path: PathBuf::from(":memory:"),
             base_url: "https://example.test".to_string(),
             whatsapp_number: "6281234567890".to_string(),
+            contact_email: "kontak@example.test".to_string(),
         }),
         db: Db::open_in_memory().unwrap(),
     }
@@ -100,6 +101,15 @@ async fn home_links_whatsapp_and_privacy() {
 }
 
 #[tokio::test]
+async fn home_links_contact_email() {
+    let (_, _, body) = get("/").await;
+    assert!(
+        body.contains(r#"<a href="mailto:kontak@example.test">kontak@example.test</a>"#),
+        "{body}"
+    );
+}
+
+#[tokio::test]
 async fn home_has_no_script() {
     let (_, _, body) = get("/").await;
     assert!(!body.contains("<script"));
@@ -113,6 +123,15 @@ async fn privacy_states_retention() {
     assert!(body.contains("Kebijakan Privasi"));
     assert!(body.contains("12 bulan"));
     assert!(body.contains(r#"href="https://wa.me/6281234567890""#));
+}
+
+#[tokio::test]
+async fn privacy_allows_deletion_request_by_email() {
+    let (_, _, body) = get("/privasi").await;
+    assert!(
+        body.contains(r#"<a href="mailto:kontak@example.test">kontak@example.test</a>"#),
+        "{body}"
+    );
 }
 
 #[tokio::test]

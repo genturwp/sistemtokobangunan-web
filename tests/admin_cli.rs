@@ -40,6 +40,7 @@ fn run(database: Option<&Path>, args: &[&str]) -> Output {
         .env_remove("STB_DATABASE_PATH")
         .env_remove("STB_BASE_URL")
         .env_remove("STB_WHATSAPP_NUMBER")
+        .env_remove("STB_CONTACT_EMAIL")
         .env("RUST_LOG", "info");
     if let Some(database) = database {
         command.env("STB_DATABASE_PATH", database);

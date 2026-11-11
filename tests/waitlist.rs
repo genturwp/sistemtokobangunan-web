@@ -18,6 +18,7 @@ fn test_state(db: Db) -> AppState {
             database_path: PathBuf::from(":memory:"),
             base_url: "https://example.test".to_string(),
             whatsapp_number: "6281234567890".to_string(),
+            contact_email: "kontak@example.test".to_string(),
         }),
         db,
     }
