@@ -195,6 +195,9 @@ sudo -u stb sh -c 'set -a && . /etc/stb-web/env && set +a && /opt/stb-web/stb-we
 sudo install -o root -g root -m 0755 target/release/stb-web /opt/stb-web/stb-web.new
 sudo mv /opt/stb-web/stb-web.new /opt/stb-web/stb-web
 sudo cp -R static/. /opt/stb-web/static/
+# add any new STB_* variables from deploy/env.example to /etc/stb-web/env first (this release:
+# STB_CONTACT_EMAIL); `stb-web serve` exits at start-up if a required one is missing
+sudo -e /etc/stb-web/env
 sudo systemctl restart stb-web
 curl -s http://127.0.0.1:8080/healthz         # expect: ok
 ```
